@@ -1,49 +1,49 @@
-from balebot.models.messages import TextMessage
-from balebot.updater import Updater
-from balebot.handlers import MessageHandler, CommandHandler
+from bale import Bot, Message, Update
+from bale.handlers import CommandHandler
 import os
+from flask import Flask
+from threading import Thread
 
-# توکن ربات بله (از متغیر محیطی یا مستقیم)
+# توکن ربات بله
 TOKEN = os.getenv("BALE_TOKEN", "1222383463:xE0V0qtz-K7mp45a4AStuUn8aINKvD6NUkM")
 
 # راه‌اندازی ربات
-updater = Updater(token=TOKEN)
-dispatcher = updater.dispatcher
+client = Bot(token=TOKEN)
 
-# دستور start
-def start_handler(bot, update):
-    bot.reply(update, "سلام! به ربات بله خوش اومدی. به من «سلام» بگو تا جواب بدم.")
-
-start_command = CommandHandler("start", start_handler)
-dispatcher.register_handler(start_command)
-
-# پاسخ به "سلام"
-def say_hello(bot, update):
-    message = update.get_effective_message()
-    if message.text and message.text.strip() == "سلام":
-        bot.reply(update, "سلام!")
-    else:
-        bot.reply(update, "فقط به «سلام» پاسخ می‌دم. لطفاً «سلام» رو تایپ کن.")
-
-message_handler = MessageHandler(TextMessage, say_hello)
-dispatcher.register_handler(message_handler)
-
-# راه‌اندازی وب‌هوک برای Render (نیاز به Flask)
-from flask import Flask, request
+# فلاسک برای نگه داشتن پورت (نیاز Render)
 app = Flask(__name__)
-
-@app.route(f"/{TOKEN}", methods=['POST'])
-def webhook():
-    update = request.get_json()
-    updater.dispatcher.process_update(update)
-    return "OK"
 
 @app.route('/')
 def home():
     return "ربات بله در حال اجراست!"
 
+# دستور start
+@client.handle(CommandHandler('start'))
+async def start_command(message: Message):
+    await message.reply("سلام! به ربات بله خوش اومدی. به من «سلام» بگو تا جواب بدم.")
+
+# رویداد دریافت پیام
+@client.event
+async def on_message(message: Message):
+    # اگه متن پیام دقیقاً "سلام" بود
+    if message.content and message.content.strip() == "سلام":
+        await message.reply("سلام!")
+    elif message.content and message.content.strip() != "/start":
+        await message.reply("فقط به «سلام» پاسخ می‌دم. لطفاً «سلام» رو تایپ کن.")
+
+# رویداد آماده شدن ربات
+@client.event
+async def on_ready():
+    print(f"ربات {client.user} آماده کار است!")
+
+def run_bot():
+    client.run()
+
 if __name__ == "__main__":
-    # ثبت وب‌هوک
-    updater.start_webhook(listen="0.0.0.0", port=int(os.environ.get("PORT", 5000)), url_path=TOKEN)
-    updater.bot.set_webhook(f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}")
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    # اجرای ربات در ترد جداگانه
+    bot_thread = Thread(target=run_bot)
+    bot_thread.start()
+    
+    # اجرای فلاسک برای Render
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
