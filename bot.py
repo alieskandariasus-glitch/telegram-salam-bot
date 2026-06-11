@@ -2,14 +2,15 @@ from bale import Bot, Message
 from flask import Flask
 from threading import Thread
 import os
+import time
 
 TOKEN = os.getenv("BALE_TOKEN", "1222383463:xE0V0qtz-K7mp45a4AStuUn8aINKvD6NUkM")
 
 client = Bot(token=TOKEN)
 app = Flask(__name__)
 
-# دیکشنری برای ذخیره وضعیت کاربران (کی قبلاً جواب گرفته)
-replied_users = set()
+# دیکشنری برای ذخیره زمان آخرین پاسخ به هر کاربر
+last_reply_time = {}
 
 @app.route('/')
 def home():
@@ -21,17 +22,26 @@ async def on_ready():
 
 @client.event
 async def on_message(message: Message):
-    user_id = message.author.id  # آیدی یکتای کاربر
+    # روش اول: استفاده از chat_id (معمولاً پایدارتر است)
+    user_id = str(message.chat.id)  # تبدیل به رشته برای دیکشنری
     
-    # فقط اگه پیام "سلام" باشه و کاربر قبلاً جواب نگرفته باشه
+    current_time = time.time()
+    last_time = last_reply_time.get(user_id, 0)
+    
+    # فقط اگر پیام "سلام" باشد و آخرین پاسخ بیش از 10 ثانیه پیش بوده
     if message.content and message.content.strip() == "سلام":
-        if user_id not in replied_users:
+        if current_time - last_time > 10:  # هر 10 ثانیه فقط یک بار پاسخ بده
             await message.reply("سلام!")
-            replied_users.add(user_id)  # علامت بزن که این کاربر جواب گرفته
-    # اگه دستور start بود، حافظه رو پاک کن (اختیاری)
+            last_reply_time[user_id] = current_time
+            print(f"به کاربر {user_id} پاسخ داده شد")
+        else:
+            print(f"کاربر {user_id} در زمان کوتاه دوباره سلام کرد - پاسخ داده نشد")
+    
     elif message.content and message.content.strip() == "/start":
-        replied_users.discard(user_id)  # حذف کاربر از حافظه
-        await message.reply("سلام! حافظه پاک شد. دوباره میتونی به من سلام کنی.")
+        # ریست کردن زمان آخرین پاسخ برای این کاربر
+        last_reply_time[user_id] = 0
+        await message.reply("سلام! حافظه پاک شد. می‌توانی دوباره سلام کنی.")
+    
     elif message.content and message.content.strip() != "/start":
         await message.reply("فقط به «سلام» پاسخ می‌دم. لطفاً «سلام» رو تایپ کن.")
 
