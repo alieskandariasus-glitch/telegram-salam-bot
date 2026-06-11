@@ -2,14 +2,16 @@ from bale import Bot, Message
 from flask import Flask
 from threading import Thread
 import os
+import time
 
 TOKEN = os.getenv("BALE_TOKEN", "1222383463:xE0V0qtz-K7mp45a4AStuUn8aINKvD6NUkM")
 
 client = Bot(token=TOKEN)
 app = Flask(__name__)
 
-# اینجا یادمون میاد به کیا جواب دادیم
-already_replied = []
+# حافظه برای جلوگیری از پردازش تکراری
+processed_messages = {}  # {message_id: time}
+replied_users = []       # کاربرانی که جواب گرفتن
 
 @app.route('/')
 def home():
@@ -21,22 +23,42 @@ async def on_ready():
 
 @client.event
 async def on_message(message: Message):
-    # ایدی کاربر رو میگیریم
+    # === روش جلوگیری از پردازش تکراری ===
+    msg_id = str(message.id)  # آیدی یکتای پیام
+    
+    # اگه این پیام قبلاً پردازش شده، بیخیال شو
+    if msg_id in processed_messages:
+        return
+    processed_messages[msg_id] = time.time()
+    
+    # پاک کردن خودکار حافظه هر 5 دقیقه
+    if len(processed_messages) > 100:
+        current_time = time.time()
+        to_delete = [mid for mid, t in processed_messages.items() if current_time - t > 300]
+        for mid in to_delete:
+            del processed_messages[mid]
+    
+    # === منطق اصلی ربات ===
     user_id = message.chat.id
+    text = message.text
     
-    # اگه پیام "سلام" بود و قبلاً به این کاربر جواب نداده بودیم
-    if message.text == "سلام" and user_id not in already_replied:
+    # دستور start - فقط یک بار پیام بده
+    if text == "/start":
+        # اگه قبلاً این کاربر توی replied_users هست، پاکش کن
+        if user_id in replied_users:
+            replied_users.remove(user_id)
+        # فقط یک بار پیام بده
+        await message.reply("سلام! حافظه پاک شد. میتونی یه بار به من سلام کنی.")
+        return
+    
+    # پیام سلام - فقط اگه قبلاً جواب نداده باشیم
+    if text == "سلام" and user_id not in replied_users:
         await message.reply("سلام!")
-        already_replied.append(user_id)  # یادمون میاد به این کاربر جواب دادیم
+        replied_users.append(user_id)
+        return
     
-    # اگه کاربر start زد، اجازه میدیم دوباره بتونه سلام کنه
-    elif message.text == "/start":
-        if user_id in already_replied:
-            already_replied.remove(user_id)
-        await message.reply("سلام! حافظه پاک شد. میتونی یه بار دیگه به من سلام کنی.")
-    
-    # اگه چیز دیگه ای فرستاد (به جز سلام و start)
-    elif message.text != "/start" and message.text != "سلام":
+    # اگه پیام دیگه‌ای بود (نه start و نه سلام)
+    if text != "/start" and text != "سلام":
         await message.reply("فقط به «سلام» پاسخ میدم. «سلام» رو تایپ کن.")
 
 def run_bot():
