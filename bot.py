@@ -1,33 +1,30 @@
-import telebot
-import os
-from flask import Flask
-from threading import Thread
+import asyncio
+from aiobale import Bot, Dispatcher
+from aiobale.types import Message
+from aiobale.filters import Command
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-bot = telebot.TeleBot(TOKEN)
+# توکن رباتت
+API_TOKEN = "1222383463:xE0V0qtz-K7mp45a4AStuUn8aINKvD6NUkM"
 
-app = Flask(__name__)
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher()
 
-@app.route('/')
-def home():
-    return "ربات در حال اجراست!"
+# دستور start
+@dp.message(Command("start"))
+async def start_handler(message: Message):
+    await message.reply("سلام! به ربات بله خوش اومدی. به من «سلام» بگو تا جواب بدم.")
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, "سلام! به ربات خوش اومدی. به من «سلام» بگو تا جواب بدم.")
+# پاسخ به "سلام"
+@dp.message()
+async def say_hello(message: Message):
+    if message.text and message.text.strip() == "سلام":
+        await message.reply("سلام!")
+    else:
+        await message.reply("فقط به «سلام» پاسخ می‌دم. لطفاً «سلام» رو تایپ کن.")
 
-@bot.message_handler(func=lambda message: message.text and message.text.strip() == "سلام")
-def say_hello(message):
-    bot.reply_to(message, "سلام!")
-
-@bot.message_handler(func=lambda message: True)
-def other_messages(message):
-    bot.reply_to(message, "فقط به «سلام» پاسخ می‌دم. لطفاً «سلام» رو تایپ کن.")
-
-def run_bot():
-    bot.infinity_polling()
+async def main():
+    print("ربات بله در حال اجراست...")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    Thread(target=run_bot).start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    asyncio.run(main())
